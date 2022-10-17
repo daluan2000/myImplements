@@ -12,75 +12,42 @@
     let rejectTasks = []  //reject时执行的任务
     let finallyTasks = []
 
+   
+
+    
     /* 
-        根据结果值value来调用then中的回调函数e
-        虽然函数名是runResolvedFunction，但实际上也有可能会调用rejectFunction，比如在本对象中resolve一个结果值为reject的promise对象时
-        参数中的resolve.then()返回值promise中resolver的回调函数
-
-        如果结果值value是一个promise对象，那么我们不能把这个value直接作为参数，而是要把它的结果值作为参数
-        如果它的结果值还是promise对象，那么就把他的结果值的结果值作为参数
-        所以，如果value是promise，则对value进行递归脱壳，直到得到最终的结果值再调用resolve或reject
+        调用resolve可能并不会立即改变状态，
+        如果value是promise类型，为了使结果值不为promise类型，它会递归得到value的最终值，然后再根据结果改变状态
+        如果最终状态是resolved，那么就调用resolveTasks和finallyTasks
+        如果最终状态是rejected，则调用reject 
     */
-    function runResolvedFunction(value, resolveFunction, resolve, rejectFunction, reject){
-        if(value instanceof MyPromise){
-            value.then(
-                //如果结果是resolved，那么递归调用runResolvedFunction
-                tvalue => {runResolvedFunction(tvalue, resolveFunction, resolve, rejectFunction, reject)},
-                //如果出现rejected，那么调用rejectedFunction
-                treason => {runRejectFunction(treason, rejectFunction, resolve, reject)}
-            )
-        }
-        else{
-            resolve(resolveFunction(value))
-        }
-    }
-
-    //不需要对结果值进行递归脱壳
-    function runRejectFunction(reason, rejectFunction, resolve, reject){
-        //如果then里面没定义处理错误的回调函数，那么调用then返回值promise里的reject，以实现错误穿透
-        if(!(rejectFunction instanceof Function)){
-            reject(reason)
-        }
-        //如果then里面定义了处理错误的回调函数，那么调用then返回值promise里的resolve
-        else{
-            resolve(rejectFunction(reason))
-        }
-    }
-
-    //也有一个递归脱壳的过程，如果结果值是promise那么就再等到这个promise有最终的结果值之后再调用finally里的回调
-    function runFinallyFunction(finallyFunction, value){
-        if(value instanceof MyPromise){
-            value.then(
-                val => {runFinallyFunction(finallyFunction, val)},
-                reason => {finallyFunction();}
-            )
-        }
-        else{
-            
-            finallyFunction()
-        }
-    }
-
-    //把结果值改为value，状态值改为resolved，并运行resolveTasks里的函数
     function resolve(value){
+        if(state !== pending){
+            return ;
+        }
         if(value instanceof MyPromise){
             value.then(
                 val => {resolve(val)},
                 reason => reject(reason)
             )
         }
-        state = resolved
-        resultValue = value
-        for(let resolveTask of resolveTasks){
-            resolveTask(value)
-        }
-        for(let finallyTask of finallyTasks){
-            finallyTask(value)
+        else {
+            state = resolved
+            resultValue = value
+            for(let resolveTask of resolveTasks){
+                resolveTask(value)
+            }
+            for(let finallyTask of finallyTasks){
+                finallyTask()
+            }
         }
     }
 
-    //把结果值改为value，状态值改为rejected，并运行rejectTasks里的函数
+    //无论value是不是promise类型，立即把结果值改为value，状态值改为rejected，并运行rejectTasks里的函数
     function reject(reason){
+        if(state !== pending){
+            return ;
+        }
         state = rejected
         resultValue = reason
         for(let rejectTask of rejectTasks){
@@ -96,31 +63,45 @@
         return value
     }
 
-    /* then返回一个promise，promise的结果值是两个回调函数的return值 */
+    // then返回一个promise，当两个回调函数中的某个被调用时，设返回值为retValue，则在该promise内部会执行resolve(retValue)
     this.then = function(resolveFunction, rejectFunction){
         
+        //为了实现值穿透，then中的第一个回调函数为空时，将其赋为此默认值
         resolveFunction = resolveFunction || defaultHandler
 
 
         //立即调用then的第一个回调函数，如果没有，则使用默认函数代替，以实现值穿透的效果
         if(state === resolved){
             return new MyPromise((resolve, reject) => {
-                runResolvedFunction(resultValue, resolveFunction, resolve, rejectFunction, reject)
+                resolve(resolveFunction(resultValue))
             })
         }
         //立即调用then的第二个回调函数
         else if(state === rejected){
             return new MyPromise((resolve, reject) => {
-                runRejectFunction(resultValue, rejectFunction, resolve, reject)
+                if(rejectFunction instanceof Function){
+                    resolve(rejectFunction(resultValue))
+                }
+                else{
+                    //如果缺少错误处理函数，那么直接调用reject
+                    //使then()的返回值为 状态=rejected resultValue=本对象结果值 的promise对象，以实现错误穿透效果。
+                    reject(resultValue)
+                }
             })
         }
         else{
             return new MyPromise((resolve, reject) => {
                 function resolveTask(value){
-                    runResolvedFunction(value, resolveFunction, resolve, rejectFunction, reject)
+                    resolve(resolveFunction(value))
                 }
                 function rejectTask(reason){
-                    runRejectFunction(reason, rejectFunction, resolve, reject)//对于处理错误的回调函数，它的返回值是否用resolve
+                    if(rejectFunction instanceof Function){
+                        resolve(rejectFunction(resultValue))
+                    }
+                    else{
+                        //原理同上
+                        reject(resultValue)
+                    }
                 }
                 resolveTasks.push(resolveTask)
                 rejectTasks.push(rejectTask)
@@ -130,13 +111,25 @@
     this.catch = function(rejectFunction){
         if(state === rejected){
             return new MyPromise((resolve, reject) => {
-                runRejectFunction(resultValue, rejectFunction, resolve, reject)
+                if(rejectFunction instanceof Function){
+                    resolve(rejectFunction(resultValue))
+                }
+                else{
+                    //原理同上
+                    reject(resultValue)
+                }
             })
         }
         else{
             return new MyPromise((resolve, reject) => {
                 function rejectTask(reason){
-                    runRejectFunction(reason, rejectFunction, resolve, reject)//对于处理错误的回调函数，它的返回值是否用resolve???
+                    if(rejectFunction instanceof Function){
+                        resolve(rejectFunction(resultValue))
+                    }
+                    else{
+                        //原理同上
+                        reject(resultValue)
+                    }
                 }
                 rejectTasks.push(rejectTask)
             })
@@ -148,13 +141,10 @@
             return
         }
         if(state !== pending){
-            runFinallyFunction(finallyFunction, resultValue)
+            finallyFunction()
         }
         else {
-            function finallyTask(value){
-                runFinallyFunction(finallyFunction, value)
-            }
-            finallyTasks.push(finallyTask)
+            finallyTasks.push(finallyFunction)
         }
     }
     resolver(resolve, reject)
