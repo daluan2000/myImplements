@@ -9,7 +9,7 @@
 - MyPromise.all()
 - MyPromise.allSettled()
 
-我的目的在于实现promise控制异步任务的功能，而有些不重要（我觉得）的细节可能与原版promise有所不同，比如对与下面这段代码，原生promise输出顺序是 ===x hhh --x 而mypromise里输出顺序是===x ---x hhh。
+我的目的在于实现promise控制异步任务的功能，而有些不重要（我觉得）的细节可能与原版promise有所不同，比如对与下面这段代码，原生promise输出顺序是===x ---x hhh 而mypromise里输出顺序是 ===x hhh --x 。
 ```javascript
 const resPromise = function(x){
     return new Promise((resolve, reject) => {
