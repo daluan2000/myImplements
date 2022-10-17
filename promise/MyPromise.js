@@ -1,19 +1,14 @@
-
- function MyPromise(resolver){
+function MyPromise(resolver){
 
     const resolved = 'resolved'
     const pending = 'pending'
     const rejected = 'rejected'
     
-
     let state = pending
     let resultValue
     let resolveTasks = [] //resolve时执行的任务
     let rejectTasks = []  //reject时执行的任务
     let finallyTasks = []
-
-   
-
     
     /* 
         调用resolve可能并不会立即改变状态，
@@ -147,7 +142,13 @@
             finallyTasks.push(finallyFunction)
         }
     }
-    resolver(resolve, reject)
+    if(!(resolver instanceof Function)){
+        throw('param of MyPromise constructor should be a function!')
+    }
+    else{
+       resolver(resolve, reject) 
+    }
+    
 }
 
 MyPromise.resolve = function(value){
@@ -164,4 +165,77 @@ MyPromise.reject = function(value){
     })
 }
 
+MyPromise.all = function(promises){
+    return new MyPromise((resolve, reject) => {
+        if(!(promises instanceof Array)){
+            throw('param of MyPromis.all() show be an array!')
+        }
+        let ans = []
+        let count = 0
+        promises.forEach((promise, index) => {
+            if(!(promise instanceof MyPromise)){
+                promise = MyPromise.resolve(promise)
+            }
+            promise.then(
+                value => {
+                    ans[index] = value
+                    count++
+                    if(count === promises.length){
+                        resolve(ans)
+                    }
+                },
+                reason => {reject(reason)}
+            )
+        })
+    })
+
+}
+MyPromise.allSettled = function(promises){
+    return new MyPromise((resolve, reject) => {
+        if(!(promises instanceof Array)){
+            throw('param of MyPromis.allSettled() show be an array!')
+        }
+        let ans = []
+        let count = 0
+        promises.forEach((promise, index) => {
+            if(!(promise instanceof MyPromise)){
+                promise = MyPromise.resolve(promise)
+            }
+            promise.then(
+                value => {
+                    let result = {value, status:'fullfilled'}
+                    ans[index] = result
+                    count++
+                    if(count === promises.length){
+                        resolve(ans)
+                    }
+                },
+                reason => {
+                    let result = {reason, status:'rejected'}
+                    ans[index] = result
+                    count++
+                    if(count === promises.length){
+                        resolve(ans)
+                    }
+                }
+            )
+        })
+    })
+}
+MyPromise.race = function(promises){
+    return new MyPromise((resolve, reject) => {
+        if(!(promises instanceof Array)){
+            throw('param of MyPromis.race() show be an array!')
+        }
+        promises.forEach((promise) => {
+            if(!(promise instanceof MyPromise)){
+                promise = MyPromise.resolve(promise)
+            }
+            promise.then(
+                value => {resolve(value)},
+                reason => {reject(reason)}
+            )
+        })
+    })
+}
 module.exports =  MyPromise

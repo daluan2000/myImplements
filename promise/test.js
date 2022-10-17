@@ -1,4 +1,4 @@
-// const Promise = require('./MyPromise') //注释这一行为原生promise，保留这一行为MyPromise
+const Promise = require('./MyPromise') //注释这一行为原生promise，保留这一行为MyPromise
 const resPromise = function(x){
     return new Promise((resolve, reject) => {
         setTimeout(() => {
@@ -8,7 +8,7 @@ const resPromise = function(x){
         }, 1000)
     })
 }
-resPromise('hhh').then(val => {console.log(val)})
+// resPromise('hhh').then(val => {console.log(val)})
 //原生promise输出顺序是===x hhh --x 而mypromise里输出顺序是===x ---x hhh
 //原生promise把resolve放到了resolver里的末尾执行，而mypromise是按照代码顺序执行，暂时没搞懂它是怎么做的
 const rejPromise = function(x){
@@ -59,3 +59,19 @@ const resresPromise = function(x){
 // Promise.reject('fff').then(val => val, reason => {console.log(reason)}).then(val => {console.log(val)})
 
 // new Promise((resolve, reject) => {reject(resPromise())}).catch((reason) => {}).finally(()=> {console.log('ggg')})
+
+
+
+
+  
+const promise1 = Promise.resolve(3);
+const promise2 = new Promise((resolve, reject) => setTimeout(reject, 1000, 'foo'));
+const promises = [promise1, promise2];
+
+Promise.allSettled(promises).
+  then((results) => results.forEach((result) => console.log(result)));
+
+// expected output:
+// "fulfilled"
+// "rejected"
+
